@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'myapp'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        port: 80
+        filters:
+          - name: label
+            values:
+              - service=myapp
+
+    relabel_configs:
+      - source_labels: ['__meta_docker_port_private']
+        regex: '443'
+        action: drop
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        regex: '(.+)'
+        target_label: 'service'
+        replacement: '$1'
+        action: 'replace'
+
+    metric_relabel_configs:
+      - regex: 'exported_service'
+        action: 'labeldrop'

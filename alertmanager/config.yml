@@ -1,0 +1,28 @@
+global:
+  resolve_timeout: '1m'
+  opsgenie_api_key: '-'
+  opsgenie_api_url: 'https://api.eu.opsgenie.com'
+
+route:
+  receiver: 'default_opsgenie'
+  group_by: ['...']
+  group_wait: '30s'
+  group_interval: '30s'
+  repeat_interval: '24h'
+
+  routes:
+    - match_re:
+        service: 'myapp'
+      receiver: 'default_opsgenie'
+
+receivers:
+  - name: 'default_opsgenie'
+    opsgenie_configs:
+      - priority: '{{ .CommonLabels.priority }}'
+        responders:
+          - name: 'Tools PreProd'
+            type: 'team'
+        message: '{{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ .CommonAnnotations.description }}{{ end }}'
+        details:
+          service: '{{ .GroupLabels.service }}'
+        tags: 'Test'

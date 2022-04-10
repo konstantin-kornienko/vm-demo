@@ -1,0 +1,9 @@
+groups:
+  - name: myapp
+    rules:
+      - alert: NumberOfUsersTooBig
+        expr: number_of_users > 15
+        labels:
+          priority: P1
+        annotations:
+          summary: "Too many users = {{ $value }} connected to '{{ $labels.application }}'"

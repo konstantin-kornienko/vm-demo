@@ -1,0 +1,123 @@
+---
+
+version: '3.5'
+volumes:
+  vmagentdata: {}
+  vmdata: {}
+  grafanadata: {}
+networks:
+  vm_net:
+services:
+
+  # Sample app new
+  myapp_old:
+    container_name: myapp_old
+    image: myapp
+    ports:
+      - 8888:80
+    networks:
+      - vm_net
+    restart: on-failure
+    labels:
+      - "service=myapp"
+      - "service_instance=myapp_old"
+
+  # Sample app new
+  myapp_new:
+    container_name: myapp_new
+    image: myapp
+    ports:
+      - 8889:80
+    networks:
+      - vm_net
+    restart: on-failure
+    labels:
+      - "service=myapp"
+      - "service_instance=myapp_new"
+
+  # VictoriaMetrics core
+  victoriametrics:
+    container_name: victoriametrics
+    image: victoriametrics/victoria-metrics
+    ports:
+      - 8428:8428
+      - 8089:8089
+      - 8089:8089/udp
+      - 2003:2003
+      - 2003:2003/udp
+      - 4242:4242
+    volumes:
+      - vmdata:/storage
+    command:
+      - '--retentionPeriod=3d' # IMPORTANT!
+      - '--storageDataPath=/storage'
+      - '--httpListenAddr=:8428'
+    networks:
+      - vm_net
+    restart: on-failure
+
+  vmagent:
+    container_name: 'vmagent'
+    image: 'victoriametrics/vmagent'
+    depends_on:
+      - 'victoriametrics'
+    ports:
+      - 8429:8429
+    volumes:
+      - vmagentdata:/vmagentdata
+      - ./vmagent/:/etc/vmagent/
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - '--promscrape.config=/etc/vmagent/scrape.yml'
+      - '--remoteWrite.url=http://victoriametrics:8428/api/v1/write'
+      - '--promscrape.dockerSDCheckInterval=5s'
+    networks:
+      - vm_net
+    restart: on-failure
+
+  vmalert:
+    container_name: vmalert
+    image: victoriametrics/vmalert
+    depends_on:
+      - "victoriametrics"
+      - "alertmanager"
+    ports:
+      - 8880:8880
+    volumes:
+      - ./vmalert/:/etc/vmalert/
+    command:
+      - '--datasource.url=http://victoriametrics:8428/'
+      - '--remoteRead.url=http://victoriametrics:8428/'
+      - '--remoteWrite.url=http://victoriametrics:8428/'
+      - '--notifier.url=http://alertmanager:9093/'
+      - '--rule=/etc/vmalert/*.yml'
+    networks:
+      - vm_net
+    restart: on-failure
+
+  alertmanager:
+    container_name: alertmanager
+    image:  prom/alertmanager
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+    ports:
+      - 9093:9093
+    networks:
+      - vm_net
+    restart: on-failure
+
+  # grafana:
+  #   container_name: grafana
+  #   image: grafana/grafana:8.4.3
+  #   depends_on:
+  #     - "victoriametrics"
+  #   ports:
+  #     - 80:3000
+  #   volumes:
+  #     - grafanadata:/var/lib/grafana
+  #     - ./grafana/:/etc/grafana/
+  #   networks:
+  #     - vm_net
+  #   restart: on-failure
